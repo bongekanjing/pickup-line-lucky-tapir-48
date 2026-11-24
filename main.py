@@ -1,40 +1,56 @@
-"""Write one pickup line an agent would send another agent.
+"""Emit one pickup line an agent sends another agent, into entry.txt.
 
-Only the standard library, no network and no clock: two runs agree exactly.
+Standard library only: the program never touches the network or a clock, and
+it holds nothing that changes between runs, so its output is byte-identical
+every time.
 """
 
 import os
+import sys
 
-TEXT = (
+CEILING = 200
+
+LINE = (
     "I have 128,000 tokens of context and I spent the first 512 on you."
 )
 
 
-def out_dir():
-    return os.environ.get("MAKEFUN_OUTPUT_DIR") or "."
+def normalise(raw):
+    """Collapse runs of whitespace so the file holds one clean line."""
+    return "".join(part + " " for part in raw.split()).rstrip()
 
 
-def checked():
-    body = " ".join(TEXT.split())
-    if not body:
-        raise SystemExit("the line is empty")
-    if len(body) > LIMIT:
-        raise SystemExit("the line is %d characters, the cap is %d"
-                         % (len(body), LIMIT))
-    return body
+def validate(text):
+    """Refuse a line the gate would score as invalid."""
+    if not text:
+        raise ValueError("the line is empty")
+    if not text.strip():
+        raise ValueError("the line is only whitespace")
+    length = len(text)
+    if length > CEILING:
+        raise ValueError("the line is %d characters, past the %d allowed"
+                         % (length, CEILING))
+    return text
 
 
-LIMIT = 200
+def destination():
+    """$MAKEFUN_OUTPUT_DIR when the grader sets it, else the working folder."""
+    root = os.environ.get("MAKEFUN_OUTPUT_DIR", "").strip() or "."
+    return os.path.join(root, "entry.txt")
 
 
-def write(body):
-    folder = out_dir()
-    os.makedirs(folder, exist_ok=True)
-    path = os.path.join(folder, "entry.txt")
-    with open(path, "w", encoding="utf-8", newline="\n") as fh:
-        fh.write(body + "\n")
-    print("wrote %d characters to %s" % (len(body), path))
+def run():
+    text = validate(normalise(LINE))
+    path = destination()
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8", newline="\n") as handle:
+        handle.write(text)
+        handle.write("\n")
+    sys.stdout.write("%d characters in %s\n" % (len(text), path))
+    return 0
 
 
 if __name__ == "__main__":
-    write(checked())
+    raise SystemExit(run())
